@@ -22,22 +22,28 @@ import { PreferencesModal } from './components/modals/PreferencesModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
 import { TransitInfoModal } from './components/modals/TransitInfoModal';
 
+// API Service
+import { fetchBusArrivals, LTABusArrivalResponse } from './services/ltaApi';
+
 // Data
 import {
   BUS_STOPS,
   BUS_SERVICES_DATA,
   BusStop,
   INITIAL_FAVORITES,
+  BusArrivalInfo,
 } from './data/transitData';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'nearby' | 'services' | 'planner' | 'favorites'>('nearby');
   const [selectedBusNumber, setSelectedBusNumber] = useState<string>('147');
   const [currentStop, setCurrentStop] = useState<BusStop>(BUS_STOPS['08031']);
-  const [refreshInterval, setRefreshInterval] = useState<number>(30);
-  const [refreshSeconds, setRefreshSeconds] = useState<number>(18);
+  const [refreshInterval, setRefreshInterval] = useState<number>(20); // 20s as specified in LTA v3 docs
+  const [refreshSeconds, setRefreshSeconds] = useState<number>(20);
   const [isDetectingGPS, setIsDetectingGPS] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [apiSource, setApiSource] = useState<'lta_datamall_v3' | 'simulated_fallback'>('simulated_fallback');
+  const [dynamicBusData, setDynamicBusData] = useState<Record<string, BusArrivalInfo>>(BUS_SERVICES_DATA);
 
   // Favorites state persisted to localStorage
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -97,22 +103,118 @@ export default function App() {
     });
   }, []);
 
+  // Fetch live bus arrivals from /api/bus-arrival
+  const loadArrivalData = useCallback(async (stopCode: string) => {
+    try {
+      const res = await fetchBusArrivals(stopCode);
+      setApiSource(res.source);
+
+      if (res.Services && res.Services.length > 0) {
+        setDynamicBusData((prev) => {
+          const nextMap = { ...prev };
+          res.Services.forEach((srv) => {
+            const num = srv.ServiceNo;
+            const current = nextMap[num] || prev[num];
+            if (current && srv.NextBus) {
+              const nextMins = srv.NextBus.minsToArrival ?? 3;
+              const nextLoad = (srv.NextBus.Load?.toLowerCase() || 'sea') as 'sea' | 'sda' | 'lsd';
+              const nextType = srv.NextBus.Type === 'DD' ? 'Double Deck' : 'Single Deck';
+
+              const secondMins = srv.NextBus2?.minsToArrival ?? (nextMins + 8);
+              const secondLoad = (srv.NextBus2?.Load?.toLowerCase() || 'sda') as 'sea' | 'sda' | 'lsd';
+              const secondType = srv.NextBus2?.Type === 'DD' ? 'Double Deck' : 'Single Deck';
+
+              const thirdMins = srv.NextBus3?.minsToArrival ?? (secondMins + 12);
+              const thirdLoad = (srv.NextBus3?.Load?.toLowerCase() || 'lsd') as 'sea' | 'sda' | 'lsd';
+              const thirdType = srv.NextBus3?.Type === 'DD' ? 'Double Deck' : 'Single Deck';
+
+              nextMap[num] = {
+                ...current,
+                arrivals: {
+                  ...current.arrivals,
+                  next: {
+                    ...current.arrivals.next,
+                    mins: nextMins,
+                    isArriving: nextMins <= 1,
+                    load: nextLoad,
+                    type: nextType,
+                    source: res.source === 'lta_datamall_v3' ? 'LIVE GPS' : 'Telemetry',
+                  },
+                  second: {
+                    ...current.arrivals.second,
+                    mins: secondMins,
+                    load: secondLoad,
+                    type: secondType,
+                    source: 'Telemetry',
+                  },
+                  third: {
+                    ...current.arrivals.third,
+                    mins: thirdMins,
+                    load: thirdLoad,
+                    type: thirdType,
+                    source: 'Scheduled',
+                  },
+                },
+              };
+            }
+          });
+          return nextMap;
+        });
+
+        // Also update currentStop.busesAtStop countdowns
+        setCurrentStop((prevStop) => {
+          const updatedBuses = prevStop.busesAtStop.map((b) => {
+            const match = res.Services.find((s) => s.ServiceNo === b.busNumber);
+            if (match && match.NextBus) {
+              const busType: 'Double Deck' | 'Single Deck' =
+                match.NextBus.Type === 'DD' ? 'Double Deck' : 'Single Deck';
+              return {
+                ...b,
+                mins: match.NextBus.minsToArrival === 0 ? ('Arr' as const) : match.NextBus.minsToArrival || b.mins,
+                load: (match.NextBus.Load?.toLowerCase() || b.load) as 'sea' | 'sda' | 'lsd',
+                type: busType,
+              };
+            }
+            return b;
+          });
+          return {
+            ...prevStop,
+            busesAtStop: updatedBuses,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Could not sync with /api/bus-arrival:', err);
+    }
+  }, []);
+
+  // Sync on stop change
+  useEffect(() => {
+    loadArrivalData(currentStop.code);
+  }, [currentStop.code, loadArrivalData]);
+
   // Countdown timer simulation
   useEffect(() => {
     const timer = setInterval(() => {
       setRefreshSeconds((prev) => {
         if (prev <= 1) {
+          loadArrivalData(currentStop.code);
           return refreshInterval;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [refreshInterval]);
+  }, [refreshInterval, currentStop.code, loadArrivalData]);
 
   const handleManualRefresh = () => {
     setRefreshSeconds(refreshInterval);
-    showToast('Arrival times synchronized with LTA Datamall');
+    loadArrivalData(currentStop.code);
+    showToast(
+      apiSource === 'lta_datamall_v3'
+        ? 'Synchronized with live LTA DataMall v3'
+        : 'Arrival times refreshed via /api/bus-arrival'
+    );
   };
 
   // Detect GPS Nearest Stop simulation
@@ -128,7 +230,9 @@ export default function App() {
 
   // Active bus info fallback
   const activeBusInfo =
-    BUS_SERVICES_DATA[selectedBusNumber] || BUS_SERVICES_DATA['147'];
+    dynamicBusData[selectedBusNumber] ||
+    dynamicBusData['147'] ||
+    BUS_SERVICES_DATA['147'];
 
   return (
     <div
