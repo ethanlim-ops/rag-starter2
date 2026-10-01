@@ -16,14 +16,20 @@ function apiDevServerPlugin(): Plugin {
         const parsedUrl = new URL(urlStr, 'http://localhost');
         const pathname = parsedUrl.pathname;
 
-        if (pathname === '/api/health' || pathname === '/api/health.js') {
+        const lower = pathname.toLowerCase();
+        if (lower === '/api/health' || lower === '/api/health.js') {
           // Provide req.query for compatibility
           (req as any).query = Object.fromEntries(parsedUrl.searchParams.entries());
           await healthHandler(req, res);
           return;
         }
 
-        if (pathname === '/api/bus-arrival' || pathname === '/api/bus-arrival.js') {
+        if (
+          lower === '/api/bus-arrival' ||
+          lower === '/api/bus-arrival.js' ||
+          lower === '/api/busarrival' ||
+          lower === '/api/busarrival.js'
+        ) {
           // Provide req.query for compatibility
           (req as any).query = Object.fromEntries(parsedUrl.searchParams.entries());
           await busArrivalHandler(req, res);

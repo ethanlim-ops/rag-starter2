@@ -1,6 +1,6 @@
 /**
  * API Health Check Endpoint
- * Monitors server status and whether LTA_ACCOUNT_KEY environment variable is configured.
+ * Monitors server status and whether LTA_ACCOUNT_KEY environment variable is configured in Vercel.
  */
 
 export default async function handler(req, res) {
@@ -14,7 +14,11 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.writeHead(200);
+    if (typeof res.writeHead === 'function') {
+      res.writeHead(200);
+    } else if (typeof res.status === 'function') {
+      res.status(200);
+    }
     res.end();
     return;
   }
@@ -30,6 +34,7 @@ export default async function handler(req, res) {
     environment: process.env.NODE_ENV || 'production',
     endpoints: {
       busArrival: '/api/bus-arrival?BusStopCode=08031&ServiceNo=147',
+      BusArrival: '/api/BusArrival?BusStopCode=83139&ServiceNo=15',
       health: '/api/health',
     },
     message: isLtaKeySet
@@ -41,7 +46,9 @@ export default async function handler(req, res) {
     res.status(200).json(payload);
   } else {
     res.setHeader('Content-Type', 'application/json');
-    res.writeHead(200);
+    if (typeof res.writeHead === 'function') {
+      res.writeHead(200);
+    }
     res.end(JSON.stringify(payload, null, 2));
   }
 }
