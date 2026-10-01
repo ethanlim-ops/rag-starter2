@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --font-service-number: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  --font-arrival-time: "Space Grotesk", system-ui, -apple-system, sans-serif;
+
+  --color-primary: #520059;
+  --color-primary-container: #6e1d74;
+  --color-primary-fixed: #ffd6fa;
+  --color-transit-purple-deep: #4b1a7a;
+  --color-transit-red-accent: #d81b60;
+
+  --color-surface-card: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-bright: #f8f9ff;
+  --color-background: #f8f9ff;
+
+  --color-border-subtle: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-muted: #64748b;
+
+  --color-load-seats-available: #059669;
+  --color-load-standing-available: #d97706;
+  --color-load-crowded: #dc2626;
+  --color-on-primary: #ffffff;
+}
+
+body {
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  background-color: #f8f9ff;
+  color: #0f172a;
+}
+
+.font-service-number {
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+}
+
+.font-headline-lg,
+.font-headline-md,
+.font-arrival-time {
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.material-symbols-outlined.filled,
+.material-symbols-outlined[data-filled="true"] {
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.pulse-animation {
+  animation: pulse-ring 2.5s infinite ease-in-out;
+}
